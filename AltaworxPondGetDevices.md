@@ -150,18 +150,9 @@ The `AltaworxPondGetDevices` Lambda function synchronizes device data from the P
 ## Shared API Call Helpers (conceptual)
 This Lambda relies on shared HTTP helper utilities (request factory, headers, and list retrieval) from the common Pond integration library. They handle authentication headers, query construction for pagination (`offset`, `pageSize`), and HTTP request execution. Per your request, detailed code is omitted here.
 
-## Example Stored Procedure (Devices)
-
-```sql
-CREATE PROCEDURE [dbo].[usp_Pond_GetAllDeviceIds]
-    @ServiceProviderId INT
-AS
-BEGIN
-    SELECT [Id]
-    FROM [dbo].[PondDevice]
-    WHERE [IsActive] = 1
-      AND [IsDeleted] = 0
-      AND [ServiceProviderId] = @ServiceProviderId;
-END;
-```
+## Stored Procedure Purpose (Devices)
+- Purpose: Return active, non-deleted device Ids scoped by `ServiceProviderId` to support downstream staged device processing and reconciliation.
+- Input: `ServiceProviderId`.
+- Output: Set of device identifiers (`Id`).
+- Consumers: Downstream processors (e.g., staged devices processing, progress tracking updates).
 
