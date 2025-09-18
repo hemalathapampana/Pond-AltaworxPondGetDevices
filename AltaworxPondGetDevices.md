@@ -20,7 +20,6 @@ The `AltaworxPondGetDevices` Lambda function synchronizes device data from the P
     - TryGetTotalPageCount via Pond API (PondGetDeviceEndpoint, PageSize)
     - LoadDevicePagesToProcessTable (seed page markers)
     - InitGetDevicePages (enqueue one SQS message per page)
-    - Shape
 
 ### Processing Flow (ServiceProviderId supplied in SQS message)
 - **ProcessSyncDevicePageByServiceProviderId**
@@ -30,7 +29,6 @@ The `AltaworxPondGetDevices` Lambda function synchronizes device data from the P
     - GetSinglePageDeviceListFromPondAPIAsync (paged fetch)
     - LoadDevicesToStagingTable (bulk copy to staging)
     - CheckSyncDeviceStepProgress (emit progress/completion message)
-    - Shape
 
 ## LOW-LEVEL FLOW (Detailed Method Explanations)
 
@@ -67,7 +65,6 @@ The `AltaworxPondGetDevices` Lambda function synchronizes device data from the P
     - `LoadDevicePagesToProcessTable(context, serviceProviderId, totalPages)` seeds DB page markers (`POND_GET_DEVICES_PAGE_TO_PROCESS`)
     - For page in [0, totalPages):
       - `InitGetDevicePages(context, serviceProviderId, page)` enqueues SQS message to `GetDevicesQueueURL`
-    - Shape
 
 ### ProcessSyncDevicePageByServiceProviderId (Processing Mode)
 - **Input**: `AmopLambdaContext context`, `SqsValues sqsValues`
@@ -82,7 +79,6 @@ The `AltaworxPondGetDevices` Lambda function synchronizes device data from the P
       - Extracts list via `response => response.Elements`
     - `LoadDevicesToStagingTable` builds a `DataTable` and executes `SqlBulkCopy` to `PondDeviceStaging`
     - On each page, calls `CheckSyncDeviceStepProgress` with `IsSuccessful`, which emits an SQS message to `ProcessStagedDevicesQueueURL` for downstream processing
-    - Shape
 
 ## Utility Functions
 
@@ -134,7 +130,6 @@ The `AltaworxPondGetDevices` Lambda function synchronizes device data from the P
 - **SqsService**: SQS message publishing
 - **RetryPolicyHelper**: SQL transient retry policy
 - **HttpClientSingleton** and **HttpRequestFactory**: HTTP client and request construction
-- Shape
 
 ## Data Flow Summary
 - **Initialization**: seed page markers per service provider and enqueue SQS messages per page
@@ -142,7 +137,6 @@ The `AltaworxPondGetDevices` Lambda function synchronizes device data from the P
 - **Stage**: bulk insert to `PondDeviceStaging`
 - **Advance**: emit progress messages to `ProcessStagedDevicesQueueURL` for downstream processing
 - **Note**: Page-to-process tracking is staged into `POND_GET_DEVICES_PAGE_TO_PROCESS`; downstream components can update progress via repository methods (e.g., `UpdateDevicesPageStatusAndCheckSyncProgress`) as applicable
-- Shape
 
 ## URLs and Credentials
 - **BaseUrl**: `https://www.mydashboard.pondmobile.com/`
@@ -153,77 +147,8 @@ The `AltaworxPondGetDevices` Lambda function synchronizes device data from the P
 - **EncodedPassword**: `M2YxMjUzNzYtNzljZi00N2VlLTk4NTEtNjQyY2MyZWVjNmU4`
 - **TokenValue**: `eyJvcmciOiI2Mjg2MWUxZmY4YjU3ZDAwMDEzNmI1NjkiLCJpZCI6IjU1M2MzYWUwMGU3NjRlMjM4MzYxOWY3OWY4N2I3YWZlIiwiaCI6Im11cm11cjY0In0`
 
-## Shared API Call Helpers (used unchanged for Devices)
-
-```csharp
-public async Task<T> GetPondListAsync<T>(HttpClient httpClient, string endpoint, int offset = 0, int pageSize = PondHelper.CommonConfig.DEFAULT_PAGE_SIZE, IKeysysLogger logger = null)
-{
-    logger?.LogInfo(CommonConstants.SUB, $"({endpoint}, {offset}, {pageSize})");
-
-    var baseUri = _isProduction ? _pondAuthentication.ProductionURL : _pondAuthentication.SandboxURL;
-    var queryParameters = BuildQueryParamGetInventoryList(offset, pageSize);
-    var dictFormUrlEncoded = new FormUrlEncodedContent(queryParameters);
-    var queryString = await dictFormUrlEncoded.ReadAsStringAsync();
-    var apiUrl = $"{baseUri.TrimEnd('/')}/{_pondAuthentication.DistributorId}/{endpoint}?{queryString}";
-
-    var requestMessage = BuildRequestMessage(apiUrl, CommonConstants.METHOD_GET);
-
-    var response = await httpClient.SendAsync(requestMessage);
-    var responseBody = await response.Content.ReadAsStringAsync();
-
-    if (!response.IsSuccessStatusCode)
-    {
-        logger?.LogError(CommonConstants.ERROR, responseBody);
-    }
-    return JsonConvert.DeserializeObject<T>(responseBody);
-}
-```
-
-```csharp
-private HttpRequestMessage BuildRequestMessage(string baseURL, string method, string content = null, string tokenValue = null)
-{
-    if (string.IsNullOrWhiteSpace(content))
-    {
-        if(!string.IsNullOrWhiteSpace(tokenValue))
-        {
-            return _httpRequestFactory.BuildRequestMessage(
-            _pondAuthentication,
-            new HttpMethod(method),
-            new Uri(baseURL),
-            BuildRequestHeader(_pondAuthentication.APIKey),
-            null,
-            tokenValue
-            );
-        }
-        return _httpRequestFactory.BuildRequestMessage(
-            _pondAuthentication,
-            new HttpMethod(method),
-            new Uri(baseURL),
-            BuildRequestHeader(_pondAuthentication.APIKey)
-        );
-    }
-
-    var requestContent = new StringContent(content, Encoding.UTF8, CommonConstants.APPLICATION_JSON);
-
-    return _httpRequestFactory.BuildRequestMessage(
-        _pondAuthentication,
-        new HttpMethod(method),
-        new Uri(baseURL),
-        BuildRequestHeader(_pondAuthentication.APIKey),
-        requestContent
-    );
-}
-```
-
-```csharp
-private Dictionary<string, string> BuildRequestHeader(string apiKey)
-{
-    return new Dictionary<string, string> {
-        { PondHelper.CommonString.APPLICATION_ACCEPTED, CommonConstants.APPLICATION_JSON },
-        { PondHelper.CommonString.API_KEY, apiKey}
-    };
-}
-```
+## Shared API Call Helpers (conceptual)
+This Lambda relies on shared HTTP helper utilities (request factory, headers, and list retrieval) from the common Pond integration library. They handle authentication headers, query construction for pagination (`offset`, `pageSize`), and HTTP request execution. Per your request, detailed code is omitted here.
 
 ## Example Stored Procedure (Devices)
 
